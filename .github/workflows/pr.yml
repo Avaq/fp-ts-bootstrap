@@ -1,0 +1,34 @@
+name: PR
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    env:
+      node-version: 20.x
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Install NodeJS
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.node-version }}
+
+    - name: Cache Node Modules
+      uses: actions/cache@v3
+      id: cache-node-modules
+      with:
+        path: node_modules
+        key: ${{ runner.OS }}-node${{ env.node-version }}-ci-${{ hashFiles('**/package-lock.json') }}
+
+    - name: Install Dependencies
+      if: steps.cache-node-modules.outputs.cache-hit != 'true'
+      run: npm install --ignore-scripts
+
+    - name: Run unit tests
+      run: npm run test

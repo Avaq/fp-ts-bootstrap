@@ -1,0 +1,33 @@
+{
+  "name": "fetch-ts-node",
+  "version": "1.0.0",
+  "description": "Application bootstrapping utilities for fp-ts",
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "tsc -p tsconfig.json && ts-node src/Bracket.test.ts",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/avaq/fetch-ts-node.git"
+  },
+  "homepage": "https://github.com/avaq/fetch-ts-node",
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "author": "Aldwin Vlasblom <aldwin@avaq.it> (https://github.com/Avaq)",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "fast-check": "^3.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.6.4"
+  },
+  "dependencies": {
+    "fp-ts": "^2.16.0"
+  }
+}
