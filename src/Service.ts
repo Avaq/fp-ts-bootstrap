@@ -11,5 +11,6 @@ export type ResourceOf<S extends Service<any, any, any>> = (
 export const of = RT.of(B.Pointed);
 export const map = RT.map(B.Functor);
 export const ap = RT.ap(B.Apply);
+export const apPar = RT.ap(B.ApplyPar);
 export const chain = RT.chain(B.Chain);
 export const fromReader = RT.fromReader(B.Pointed);

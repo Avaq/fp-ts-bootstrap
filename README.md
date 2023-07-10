@@ -106,6 +106,8 @@ some derivative functions are exported as well.
 - Applicative: Pointed Apply
 - Chain: `chain`, `chainFirst`, `bind`
 - Monad: Pointed Chain
+- ApplyPar: `apPar`, `apFirstPar`, `apSecondPar`, `apSPar`, `getApplySemigroupPar`, `sequenceTPar`, `sequenceSPar`
+- ApplicativePar: Pointed ApplyPar
 
 ### Service
 
@@ -167,25 +169,34 @@ const withMyFile: Service<Error, Dependencies, FS.FileHandle> = (
 
 ### Combining services in parallel
 
-The `Bracket` type provides a sequential `Applicative` instance that it uses by
-default. To combine services in parallel, there's the following two functions:
+The `Bracket` type has a sequential `Applicative` instance that it uses by
+default, but there's also a parallel `ApplicativePar` instance that you can use
+to combine services in parallel.\* Two very useful derivative function using
+`ApplicativePar` are
 
-- `combineStruct`: This can be used in Do-notation in place of `apS`.
-- `packStruct`: This can be used as a parallel alternative to `sequenceS`.
+- `sequenceSPar` for building a Struct of resources from a Struct of Brackets; and
+- `apSPar` for adding another property to an existing Struct of services:
 
 ```ts
+import {pipe} from 'fp-ts/function';
 import * as Bracket from 'fp-ts-bootstrap/Bracket';
 
-const withServices = Bracket.packStruct({
-  env: withEnv,
-  logger: withLogger({level: 'info'}),
-  database: withDatabase({url: 'postgres://localhost:5432'}),
-});
+const withServices = pipe(
+  Bracket.sequenceSPar({
+    env: withEnv,
+    logger: withLogger({level: 'info'}),
+  }),
+  Bracket.apSPar('database', withDatabase({url: 'postgres://localhost:5432'}))
+);
 
 const program = withServices(({env, logger, database}) => pipe(
   // ...
 ));
 ```
+
+\* By "in parallel" we mean that the services are *acquired* in parallel, but
+disposed in sequence. This is a technical limitation that exists to ensure that
+the `ApplyPar` instance is lawful.
 
 ### Threading dependencies during service composition
 

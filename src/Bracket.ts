@@ -5,11 +5,10 @@ import * as $Applicative from 'fp-ts/Applicative';
 import * as $Chain from 'fp-ts/Chain';
 import * as $Monad from 'fp-ts/Monad';
 import * as TE from 'fp-ts/TaskEither';
-import * as T from 'fp-ts/Task';
 import * as E from 'fp-ts/Either';
 import * as O from 'fp-ts/Option';
 import {NaturalTransformation22} from 'fp-ts/NaturalTransformation';
-import {constVoid, pipe} from 'fp-ts/function';
+import {pipe} from 'fp-ts/function';
 
 export const URI = 'fp-ts-bootstrap/Bracket';
 export type URI = typeof URI;
@@ -73,58 +72,77 @@ export const sequenceS = $Apply.sequenceS(Apply);
 
 export const Applicative: $Applicative.Applicative2<URI> = {...Pointed, ...Apply};
 
-const UnlawfulApplyPar: $Apply.Apply2<URI> = {
+export const ApplyPar: $Apply.Apply2<URI> = {
   ...Functor,
   ap: <E, A, B>(fab: Bracket<E, (a: A) => B>, fa: Bracket<E, A>) => (
     <T>(consume: (resource: B) => TE.TaskEither<E, T>): TE.TaskEither<E, T> => (
-      () => new Promise((resolve, reject) => {
+      () => {
         let ab: O.Option<(a: A) => B> = O.none;
         let a: O.Option<A> = O.none;
-        let resolveOther: (value: E.Either<E, T>) => void = constVoid;
-        let ran = false;
 
-        let run = () => new Promise<E.Either<E, T>>((resolve, reject) => {
-          if (O.isSome(ab) && O.isSome(a) && !ran) {
-            ran = true;
-            consume(ab.value(a.value))().then(ret => {
-              resolve(ret);
-              resolveOther(ret);
-            }, reject);
-          } else {
-            resolveOther = resolve;
+        let resolvedFa: O.Option<E.Either<E, T>> = O.none;
+        let resolveFa = (value: E.Either<E, T>) => {
+          resolvedFa = O.some(value);
+        };
+
+        let resolvedFab: O.Option<E.Either<E, T>> = O.none;
+        let resolveFab = (value: E.Either<E, T>) => {
+          resolvedFab = O.some(value);
+        };
+
+        const promiseFa = fa(x => () => {
+          if (O.isSome(resolvedFa)) {
+            return Promise.resolve(resolvedFa.value);
           }
+          if (O.isSome(ab)) {
+            return consume(ab.value(x))();
+          }
+          return new Promise<E.Either<E, T>>(resolve => {
+            a = O.some(x);
+            resolveFa = resolve;
+          });
+        })().then(ea => {
+          resolveFab(ea);
+          return ea;
         });
 
-        const taskAB = pipe(fab(f => {
-          ab = O.some(f);
-          return run;
-        }), T.map(eab => {
-          resolveOther(eab);
-          run = T.of(eab);
+        const promiseFab = fab(f => () => {
+          if (O.isSome(resolvedFab)) {
+            return Promise.resolve(resolvedFab.value);
+          }
+          if (O.isSome(a)) {
+            return consume(f(a.value))().then(ret => {
+              resolveFa(ret);
+              return promiseFa.then(retFa => pipe(retFa, E.apSecond(ret)));
+            });
+          }
+          return new Promise<E.Either<E, T>>(resolve => {
+            ab = O.some(f);
+            resolveFab = resolve;
+          });
+        })().then(eab => {
+          resolveFa(eab);
           return eab;
-        }));
+        });
 
-        const taskA = pipe(fa(x => {
-          a = O.some(x);
-          return run;
-        }), T.map(ea => {
-          resolveOther(ea);
-          run = T.of(ea);
-          return ea;
-        }));
-
-        pipe(taskAB, TE.apFirst(taskA))().then(resolve, reject);
-      })
+        return Promise.all([promiseFab, promiseFa]).then(([eab]) => eab);
+      }
     )
   ),
 };
 
 export const apPar = <E, A>(fa: Bracket<E, A>) => (
-  <B>(fab: Bracket<E, (a: A) => B>) => UnlawfulApplyPar.ap(fab, fa)
+  <B>(fab: Bracket<E, (a: A) => B>) => ApplyPar.ap(fab, fa)
 );
 
-export const combineStruct = $Apply.apS(UnlawfulApplyPar);
-export const packStruct = $Apply.sequenceS(UnlawfulApplyPar);
+export const apFirstPar = $Apply.apFirst(ApplyPar);
+export const apSecondPar = $Apply.apSecond(ApplyPar);
+export const apSPar = $Apply.apS(ApplyPar);
+export const getApplySemigroupPar = $Apply.getApplySemigroup(ApplyPar);
+export const sequenceTPar = $Apply.sequenceT(ApplyPar);
+export const sequenceSPar = $Apply.sequenceS(ApplyPar);
+
+export const ApplicativePar: $Applicative.Applicative2<URI> = {...Pointed, ...ApplyPar};
 
 export const Chain: $Chain.Chain2<URI> = {
   ...Apply,

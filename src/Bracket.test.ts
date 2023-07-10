@@ -110,23 +110,6 @@ const equivalence = <E, R>(
   );
 };
 
-const equivalenceOnSuccessfullConsumption = <E, R>(
-  EqR: $E.Eq<R>,
-  EqE: $E.Eq<E>,
-  ShowR: $S.Show<R> = ShowUnknown,
-  ShowE: $S.Show<E> = ShowUnknown,
-) => {
-  const eq = eqBy(
-    BracketResultEq(EqE, EqR),
-    BracketResultShow(ShowE, ShowR)
-  );
-
-  return (a: Bracket.Bracket<E, R>, b: Bracket.Bracket<E, R>) => (
-    Promise.all([runBracket(TE.of)(a), runBracket(TE.of)(b)])
-    .then(([resultA, resultB]) => eq(resultA, resultB))
-  );
-};
-
 type Err = {error: string};
 const ErrEq: $E.Eq<Err> = $E.struct({error: Str.Eq});
 const ErrShow: $S.Show<Err> = ({show: (e) => `Err(${Str.Show.show(e.error)})`});
@@ -155,6 +138,13 @@ const BracketArb = <R>(ResourceArb: FC.Arbitrary<R>) => FC.tuple(
 const testErr = {error: 'test error'};
 
 const strErrEquivalence = equivalence(Str.Eq, ErrEq, Str.Show, ErrShow)(testErr);
+
+const recordErrEquivalence = equivalence(
+  R.getEq(Str.Eq),
+  ErrEq,
+  R.getShow(Str.Ord)(Str.Show),
+  ErrShow
+)(testErr);
 
 const noDispose = <E>() => TE.of<E, undefined>(undefined);
 type Strstr = (str: string) => string;
@@ -227,6 +217,51 @@ hold('Applicative-derived Functor', FC.asyncProperty(
   )
 ));
 
+hold('ApplyPar composition', FC.asyncProperty(
+  BracketArb(FC.string()),
+  BracketArb(StringFunctionArb),
+  BracketArb(StringFunctionArb),
+  (mx, mf, mg) => strErrEquivalence(
+    Bracket.ApplyPar.ap(mg, Bracket.ApplyPar.ap(mf, mx)),
+    Bracket.ApplyPar.ap(Bracket.ApplyPar.ap(Bracket.ApplyPar.map(mg, composeStrstr), mf), mx)
+  )
+));
+
+hold('ApplicativePar identity', FC.asyncProperty(
+  BracketArb(FC.string()),
+  (mx) => strErrEquivalence(
+    Bracket.ApplicativePar.ap(Bracket.ApplicativePar.of<Err, Strstr>(identity), mx),
+    mx,
+  )
+));
+
+hold('ApplicativePar homomorphism', FC.asyncProperty(
+  FC.string(),
+  StringFunctionArb,
+  (x, f) => strErrEquivalence(
+    Bracket.ApplicativePar.ap(Bracket.of<Err, Strstr>(f), Bracket.ApplicativePar.of(x)),
+    Bracket.ApplicativePar.of(f(x))
+  )
+));
+
+hold('ApplicativePar interchange', FC.asyncProperty(
+  FC.string(),
+  BracketArb(StringFunctionArb),
+  (x, mf) => strErrEquivalence(
+    Bracket.ApplicativePar.ap(mf, Bracket.ApplicativePar.of(x)),
+    Bracket.ApplicativePar.ap(Bracket.ApplicativePar.of<Err, (f: Strstr) => string>(f => f(x)), mf)
+  )
+));
+
+hold('ApplicativePar-derived Functor', FC.asyncProperty(
+  BracketArb(FC.string()),
+  StringFunctionArb,
+  (mx, f) => strErrEquivalence(
+    Bracket.ApplicativePar.map(mx, f),
+    Bracket.ApplicativePar.ap(Bracket.ApplicativePar.of<Err, Strstr>(f), mx)
+  )
+));
+
 hold('Chain associativity', FC.asyncProperty(
   BracketArb(FC.string()),
   BracketFunctionArb,
@@ -293,16 +328,20 @@ hold('of(x) = bracket(TE.of(x), noDispose)', FC.asyncProperty(
   )
 ));
 
-hold('sequenceS({a: ma, b: mb}) ~= packStruct({a: ma, b: mb})', FC.asyncProperty(
+hold('ap(mx)(mf) = apPar(mx)(mf)', FC.asyncProperty(
+  BracketArb(FC.string()),
+  BracketArb(StringFunctionArb),
+  (mx, mf) => strErrEquivalence(
+    Bracket.ap(mx)(mf),
+    Bracket.apPar(mx)(mf)
+  )
+));
+
+hold('sequenceS({a: ma, b: mb}) = sequenceSPar({a: ma, b: mb})', FC.asyncProperty(
   BracketArb(FC.string()),
   BracketArb(FC.string()),
-  (ma, mb) => equivalenceOnSuccessfullConsumption(
-    R.getEq(Str.Eq),
-    ErrEq,
-    R.getShow(Str.Ord)(Str.Show),
-    ErrShow
-  )(
+  (ma, mb) => recordErrEquivalence(
     Bracket.sequenceS({a: ma, b: mb}),
-    Bracket.packStruct({a: ma, b: mb})
+    Bracket.sequenceSPar({a: ma, b: mb})
   )
 ));
