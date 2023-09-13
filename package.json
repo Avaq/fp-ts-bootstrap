@@ -1,6 +1,6 @@
 {
   "name": "fp-ts-bootstrap",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "description": "Application bootstrapping utilities for fp-ts",
   "main": "lib/index.js",
   "type": "commonjs",
