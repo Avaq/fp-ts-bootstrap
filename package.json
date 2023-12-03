@@ -1,7 +1,7 @@
 {
   "name": "fp-ts-bootstrap",
   "version": "0.1.0",
-  "description": "Application bootstrapping utilities for fp-ts",
+  "description": "Service orchestration made functional",
   "main": "lib/index.js",
   "type": "commonjs",
   "scripts": {

@@ -1,36 +1,43 @@
 # FP-TS Bootstrap
 
-This is a module aimed at application bootstrapping using types from [fp-ts][].
-Its ideas and most of the code were ported from the [fluture-hooks][] library.
+> Service orchestration made functional
 
-This module mainly provides a [Bracket type](#bracket) with accompanying type
-class instances. The Bracket type is a drop-in replacement for the Cont type
-from [fp-ts-cont][], but specialized in returning `TaskEither`. This solves the
-problem stipulated at the end of [application bootstrapping with fp-ts][] by
-allowing the return type to be threaded through the program. Furthermore, it
-makes the `ApplicativePar` instance possible, which allows for parallel
-composition of bracketed resources.
+An application bootstrapping framework around Monadic composition of application
+services. Based on types from [fp-ts][] with ideas that were tried and tested
+with the [fluture-hooks][] library.
 
-Besides the Bracket type, this module also provides a [Service type](#service)
-which is a small layer on top for managing dependencies through the Reader monad.
+## Features
+
+- 🧑‍🤝‍🧑 A "service" is a combination of its acquisition and disposal logic
+- 🚦 Easy management of asynchronously acquired services
+- 🛬 Resources are disposed gracefully after consumption
+- 🪂 Resources are disposed even if the consumption program crashes
+- 🔀 Automatic sequencing of acquisition and disposal of dependent services
+- 🛣️ Faster app startup times with parallel acquisition of independent services
+- 🏗 Use the Monadic API to compose larger services out of multiple smaller ones
+- 🧃 Monads all the way down! Learn more in [this article about the approach][]
 
 [fp-ts]: https://gcanti.github.io/fp-ts/
 [fluture-hooks]: https://github.com/fluture-js/fluture-hooks
-[fp-ts-cont]: https://github.com/joshburgess/fp-ts-cont
-[application bootstrapping with fp-ts]: https://dev.to/avaq/application-bootstrapping-with-fp-ts-59b5
+[this article about the approach]: https://dev.to/avaq/application-bootstrapping-with-fp-ts-59b5
 
 ## Example
 
-Define your service. See the full example in
-[`./example/services/server.ts`](./example/services/server.ts).
+We start with a service definition. It consists of an acquisition function,
+a disposal function, bundled with the `bracket` utility.
+
+See the full example in [`./example/services/server.ts`](./example/services/server.ts).
 
 ```ts
 export const withServer: Service.Service<Error, Dependencies, HTTP.Server> = (
   ({port, app}) => Bracket.bracket(
+    // Acquire:
     () => new Promise(resolve => {
       const server = HTTP.createServer(app);
       server.listen(port, () => resolve(E.right(server)));
     }),
+
+    // Dispose:
     server => () => new Promise(resolve => {
       server.close((e: unknown) => resolve(
         e instanceof Error ? E.left(e) : E.right(undefined)
@@ -40,7 +47,8 @@ export const withServer: Service.Service<Error, Dependencies, HTTP.Server> = (
 );
 ```
 
-Combine multiple such services with ease using Do notation. See the full example
+Multiple services can be combined in a host of different ways to form larger
+services. One powerful way to do so is with Do notation. See the full example
 in [`./example/services/index.ts`](./example/services/index.ts).
 
 ```ts
@@ -60,7 +68,14 @@ export const withServices = pipe(
 );
 ```
 
-Consume your service. See the full example in [`./example/index.ts`](./example/index.ts).
+A service is really just a function that takes a callback: The program that
+"consumes" the service. Consumption of `withServer` is as easy as
+`withServer(server => ...)` and `withServices` is just
+`withServices(({server, logger}) => ...)`.
+
+So let's consume the `withServices` service.
+
+See the full example in [`./example/index.ts`](./example/index.ts).
 
 ```ts
 const program = withServices(({server, logger}) => pipe(
@@ -72,11 +87,15 @@ const program = withServices(({server, logger}) => pipe(
 ));
 ```
 
-And finally, run your program:
+The consumption of a service returns an [fp-ts `TaskEither`][], which can itself
+be monadically composed with other Tasks, or eventually consumed. This too is
+just a function that returns a Promise:
 
 ```ts
 program().then(E.fold(console.error, console.log), console.error);
 ```
+
+[fp-ts `TaskEither`]: https://gcanti.github.io/fp-ts/modules/TaskEither.ts.html
 
 ## Types
 
@@ -92,12 +111,16 @@ type Bracket<E, R> = (
 );
 ```
 
+The Bracket type is a drop-in replacement for the Cont type from [fp-ts-cont][],
+but specialized in returning `TaskEither`. This solves the problem stipulated at
+the end of [application bootstrapping with fp-ts][] by allowing the return type
+to be threaded through the program. Furthermore, it makes the `ApplicativePar`
+instance possible, which allows for parallel composition of bracketed resources.
+
 The Bracket type aliases the structure that's encountered when using a curried
 variant of [fp-ts' `TaskEither.bracket` function][]. This curried variant is
 also exported from the Bracket module as `bracket`. It models a bracketed
 resource for which the consumption hasn't been specified yet.
-
-[fp-ts' `TaskEither.bracket` function]: https://gcanti.github.io/fp-ts/modules/TaskEither.ts.html#bracket
 
 The Bracket module defines various type class instances for `Bracket` that allow
 you to compose and combine multiple bracketed resources. From most instances,
@@ -111,6 +134,10 @@ some derivative functions are exported as well.
 - Monad: Pointed Chain
 - ApplyPar: `apPar`, `apFirstPar`, `apSecondPar`, `apSPar`, `getApplySemigroupPar`, `sequenceTPar`, `sequenceSPar`
 - ApplicativePar: Pointed ApplyPar
+
+[fp-ts' `TaskEither.bracket` function]: https://gcanti.github.io/fp-ts/modules/TaskEither.ts.html#bracket
+[fp-ts-cont]: https://github.com/joshburgess/fp-ts-cont
+[application bootstrapping with fp-ts]: https://dev.to/avaq/application-bootstrapping-with-fp-ts-59b5
 
 ### Service
 
