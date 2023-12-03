@@ -24,11 +24,14 @@ type Dependencies = {
 
 export const withServer: Service.Service<Error, Dependencies, HTTP.Server> = (
   ({port, app}) => Bracket.bracket(
+    // Acquire:
     () => new Promise(resolve => {
       const server = HTTP.createServer(app);
       server.once('error', e => resolve(E.left(e)));
       server.listen(port, () => resolve(E.right(server)));
     }),
+
+    // Dispose:
     server => () => new Promise(resolve => {
       server.removeAllListeners('error');
       server.close((e: unknown) => resolve(
